@@ -122,6 +122,7 @@ public interface Tree extends TaxonList, Units, Identifiable, Attributable {
      * @param node the node to retrieve the rate of
      * @return the rate of node in the tree.
      */
+    @Deprecated
     double getNodeRate(NodeRef node);
 
     /**

@@ -45,7 +45,7 @@ import java.util.*;
  * @author Alexei Drummond
  * @version $Id: TreeModel.java,v 1.129 2006/01/05 17:55:47 rambaut Exp $
  */
-public class TreeModel extends AbstractModel implements MultivariateTraitTree, Citable {
+public class TreeModel extends AbstractModel implements MutableTree, Citable {
 
     //
     // Public stuff
@@ -210,10 +210,6 @@ public class TreeModel extends AbstractModel implements MultivariateTraitTree, C
 
     private final List<TreeChangedEvent> treeChangedEvents = new ArrayList<TreeChangedEvent>();
 
-    public boolean hasRates() {
-        return hasRates;
-    }
-
     public boolean inTreeEdit() {
         return inEdit;
     }
@@ -265,14 +261,6 @@ public class TreeModel extends AbstractModel implements MultivariateTraitTree, C
 
         public boolean isHeightChanged() {
             return parameter == node.heightParameter;
-        }
-
-        public boolean isRateChanged() {
-            return parameter == node.rateParameter;
-        }
-
-        public boolean isTraitChanged(String name) {
-            return parameter == node.traitParameters.get(name);
         }
 
         public boolean areAllInternalHeightsChanged() {
@@ -327,73 +315,12 @@ public class TreeModel extends AbstractModel implements MultivariateTraitTree, C
     }
 
 
-    /**
-     * @param node
-     * @return the rate parameter associated with this node.
-     */
-    public double getNodeRate(NodeRef node) {
-        if (!hasRates) {
-            return 1.0;
-        }
-        return ((Node) node).getRate();
-    }
-
     public Object getNodeAttribute(NodeRef node, String name) {
-
-        if (name.equals("rate")) {
-            return getNodeRate(node);
-        }
-
-        return null;
+        throw new UnsupportedOperationException("getNodeAttribute is not used for TreeModel");
     }
 
     public Iterator getNodeAttributeNames(NodeRef node) {
-        return new Iterator() {
-
-            int i = 0;
-            String[] attributes = {"rate"};
-
-            public boolean hasNext() {
-                return i < attributes.length;
-            }
-
-            public Object next() {
-                return attributes[i++];
-            }
-
-            public void remove() {
-                throw new UnsupportedOperationException("can't remove from this iterator!");
-            }
-        };
-    }
-
-    public boolean hasNodeTraits() {
-        return hasTraits;
-    }
-
-    public Map<String, Parameter> getTraitMap(NodeRef node) {
-        if (!hasTraits) throw new IllegalArgumentException("Trait parameters have not been created");
-        return ((Node) node).getTraitMap();
-    }
-
-    public double getNodeTrait(NodeRef node, String name) {
-        if (!hasTraits) throw new IllegalArgumentException("Trait parameters have not been created");
-        return ((Node) node).getTrait(name);
-    }
-
-    public Parameter getNodeTraitParameter(NodeRef node, String name) {
-        if (!hasTraits) throw new IllegalArgumentException("Trait parameters have not been created");
-        return ((Node) node).getTraitParameter(name);
-    }
-
-    public double[] getMultivariateNodeTrait(NodeRef node, String name) {
-        if (!hasTraits) throw new IllegalArgumentException("Trait parameters have not been created");
-        return ((Node) node).getMultivariateTrait(name);
-    }
-
-    public final void swapAllTraits(NodeRef node1, NodeRef node2) {
-        if (!hasTraits) throw new IllegalArgumentException("Trait parameters have not been created");
-        swapAllTraits((Node) node1, (Node) node2);
+        throw new UnsupportedOperationException("getNodeAttribute is not used for TreeModel");
     }
 
     public Taxon getNodeTaxon(NodeRef node) {
@@ -436,6 +363,17 @@ public class TreeModel extends AbstractModel implements MultivariateTraitTree, C
 
         return getNodeHeight(parent) - getNodeHeight(node);
     }
+
+    @Override
+    public double getNodeRate(NodeRef node) {
+        throw new UnsupportedOperationException("getNodeRate is deprecated");
+    }
+
+    @Override
+    public void setNodeRate(NodeRef node, double height) {
+        throw new UnsupportedOperationException("setNodeRate is deprecated");
+    }
+
 
     public NodeRef getExternalNode(int i) {
         return nodes[i];
@@ -534,10 +472,6 @@ public class TreeModel extends AbstractModel implements MultivariateTraitTree, C
 
         inEdit = false;
 
-        if (root != oldRoot) {
-            swapParameterObjects(oldRoot, root);
-        }
-
         if (TEST_NODE_BOUNDS) {
             try {
                 checkTreeIsValid();
@@ -562,23 +496,6 @@ public class TreeModel extends AbstractModel implements MultivariateTraitTree, C
 
     public void setNodeHeight(NodeRef n, double height) {
         ((Node) n).setHeight(height);
-    }
-
-
-    public void setNodeRate(NodeRef n, double rate) {
-        if (!hasRates) throw new IllegalArgumentException("Rate parameters have not been created");
-        ((Node) n).setRate(rate);
-
-    }
-
-    public void setNodeTrait(NodeRef n, String name, double value) {
-        if (!hasTraits) throw new IllegalArgumentException("Trait parameters have not been created");
-        ((Node) n).setTrait(name, value);
-    }
-
-    public void setMultivariateTrait(NodeRef n, String name, double[] value) {
-        if (!hasTraits) throw new IllegalArgumentException("Trait parameters have not been created");
-        ((Node) n).setMultivariateTrait(name, value);
     }
 
     public void setBranchLength(NodeRef node, double length) {
@@ -640,8 +557,6 @@ public class TreeModel extends AbstractModel implements MultivariateTraitTree, C
             // the parameter values are automatically stored and restored
             // just need to keep the links
             node1.heightParameter = node0.heightParameter;
-            node1.rateParameter = node0.rateParameter;
-            node1.traitParameters = node0.traitParameters;
 
             if (node0.parent != null) {
                 node1.parent = storedNodes[node0.parent.getNumber()];
@@ -1023,20 +938,6 @@ public class TreeModel extends AbstractModel implements MultivariateTraitTree, C
             }
         }
 
-        if (hasRates) {
-            for (Node node : nodes) {
-                if (node.rateParameter == parameter) {
-                    return node;
-                }
-            }
-        }
-        if (hasTraits) {
-            for (Node node : nodes) {
-                if (node.traitParameters.containsValue(parameter)) {
-                    return node;
-                }
-            }
-        }
         throw new RuntimeException("Parameter not found in any nodes:" + parameter.getId() + " " + parameter.hashCode());
         // assume it is a trait parameter and return null
 //		return null;
@@ -1055,9 +956,11 @@ public class TreeModel extends AbstractModel implements MultivariateTraitTree, C
      */
     public Parameter createNodeHeightsParameter(boolean rootNode, boolean internalNodes, boolean leafNodes) {
 
-        if (!rootNode && !internalNodes && !leafNodes) {
-            throw new IllegalArgumentException("At least one of rootNode, internalNodes or leafNodes must be true");
+        if (!rootNode) {
+            throw new UnsupportedOperationException("A node height parameter without the root is not currently implemented");
         }
+
+        checkValidFlags(rootNode, internalNodes, leafNodes);
 
         CompoundParameter parameter = new CompoundParameter("nodeHeights(" + getId() + ")");
 
@@ -1087,183 +990,9 @@ public class TreeModel extends AbstractModel implements MultivariateTraitTree, C
         return nodes[node.getNumber()].heightParameter;
     }
 
-    /**
-     * @return the relevant node rate parameter. Is private because it can only be called by the XMLParser
-     */
-    public Parameter createNodeRatesParameter(double[] initialValues, boolean rootNode, boolean internalNodes, boolean leafNodes) {
-
-        if (!rootNode && !internalNodes && !leafNodes) {
-            throw new IllegalArgumentException("At least one of rootNode, internalNodes or leafNodes must be true");
-        }
-
-        CompoundParameter parameter = new CompoundParameter("nodeRates(" + getId() + ")");
-
-        hasRates = true;
-
-        for (int i = externalNodeCount; i < nodeCount; i++) {
-            nodes[i].createRateParameter(initialValues);
-            if ((rootNode && nodes[i] == root) || (internalNodes && nodes[i] != root)) {
-                parameter.addParameter(nodes[i].rateParameter);
-            }
-        }
-
-        for (int i = 0; i < externalNodeCount; i++) {
-            nodes[i].createRateParameter(initialValues);
-            if (leafNodes) {
-                parameter.addParameter(nodes[i].rateParameter);
-            }
-        }
-
-        return parameter;
-    }
-
-    public Parameter createNodeTraitsParameter(String name, double[] initialValues) {
-        return createNodeTraitsParameter(name, initialValues.length,
-                initialValues, true, true, true, true);
-    }
-
-    /**
-     * Create a node traits parameter. Is private because it can only be called by the XMLParser
-     */
-    public Parameter createNodeTraitsParameter(String name, int dim, double[] initialValues,
-                                               boolean rootNode, boolean internalNodes,
-                                               boolean leafNodes, boolean firesTreeEvents) {
-
-        checkValidFlags(rootNode, internalNodes, leafNodes);
-
-        CompoundParameter parameter = new CompoundParameter(name);
-
-        hasTraits = true;
-
-        for (int i = externalNodeCount; i < nodeCount; i++) {
-            nodes[i].createTraitParameter(name, dim, initialValues, firesTreeEvents);
-            if ((rootNode && nodes[i] == root) || (internalNodes && nodes[i] != root)) {
-                parameter.addParameter(nodes[i].getTraitParameter(name));
-            }
-        }
-
-        for (int i = 0; i < externalNodeCount; i++) {
-            nodes[i].createTraitParameter(name, dim, initialValues, firesTreeEvents);
-            if (leafNodes) {
-                parameter.addParameter(nodes[i].getTraitParameter(name));
-            }
-        }
-
-        return parameter;
-    }
-
-    public Parameter createNodeTraitsParameterAsMatrix(String name, int dim, double[] initialValues,
-                                               boolean rootNode, boolean internalNodes,
-                                               boolean leafNodes, boolean firesTreeEvents) {
-
-        checkValidFlags(rootNode, internalNodes, leafNodes);
-
-        final int rowDim = dim;
-        final int colDim = (rootNode ? 1 : 0)
-                + (internalNodes ? internalNodeCount - 1 : 0)
-                + (leafNodes ? externalNodeCount : 0);
-
-        FastMatrixParameter parameter = new FastMatrixParameter(name, rowDim, colDim, 0.0);
-        parameter.addBounds(new Parameter.DefaultBounds(Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY,
-                rowDim * colDim));
-
-        hasTraits = true;
-
-        int parameterIndex = 0;
-        for (int i = externalNodeCount; i < nodeCount; i++) {
-            if ((rootNode && nodes[i] == root) || (internalNodes && nodes[i] != root)) {
-                nodes[i].addTraitParameter(name, parameter.getParameter(parameterIndex), initialValues, firesTreeEvents);
-                ++parameterIndex;
-            }
-        }
-
-        for (int i = 0; i < externalNodeCount; i++) {
-            if (leafNodes) {
-                nodes[i].addTraitParameter(name, parameter.getParameter(parameterIndex), initialValues, firesTreeEvents);
-                ++parameterIndex;
-            }
-        }
-
-        return parameter;
-    }
-
     private void checkValidFlags(boolean rootNode, boolean internalNodes, boolean leafNodes) {
         if (!rootNode && !internalNodes && !leafNodes) {
             throw new IllegalArgumentException("At least one of rootNode, internalNodes or leafNodes must be true");
-        }
-    }
-
-    private void swapAllTraits(Node n1, Node n2) {
-
-        for (Map.Entry<String, Parameter> entry : n1.traitParameters.entrySet()) {
-            Parameter p1 = n1.traitParameters.get(entry.getKey());
-            Parameter p2 = n2.traitParameters.get(entry.getKey());
-            final int dim = p1.getDimension();
-            for (int i = 0; i < dim; i++) {
-                double transfer = p1.getParameterValue(i);
-                p1.setParameterValue(i, p2.getParameterValue(i));
-                p2.setParameterValue(i, transfer);
-            }
-
-        }
-
-    }
-
-    /**
-     * This method swaps the parameter objects of the two nodes
-     * but maintains the values in each node.
-     * This method is used to ensure that root node of the tree
-     * always has the same parameter object.
-     */
-    private void swapParameterObjects(Node n1, Node n2) {
-
-        double height1 = n1.getHeight();
-        double height2 = n2.getHeight();
-
-        double rate1 = 1.0, rate2 = 1.0;
-
-        if (hasRates) {
-            rate1 = n1.getRate();
-            rate2 = n2.getRate();
-        }
-
-        // swap all trait parameters
-
-        if (hasTraits) {
-            Map<String, Parameter> traits1 = new HashMap<String, Parameter>();
-            Map<String, Parameter> traits2 = new HashMap<String, Parameter>();
-
-            traits1.putAll(n1.traitParameters);
-            traits2.putAll(n2.traitParameters);
-
-            Map<String, Parameter> temp = n1.traitParameters;
-            n1.traitParameters = n2.traitParameters;
-            n2.traitParameters = temp;
-
-            for (Map.Entry<String, Parameter> entry : traits1.entrySet()) {
-                n1.traitParameters.get(entry.getKey()).setParameterValueQuietly(0, entry.getValue().getParameterValue(0));
-            }
-            for (Map.Entry<String, Parameter> entry : traits2.entrySet()) {
-                n2.traitParameters.get(entry.getKey()).setParameterValueQuietly(0, entry.getValue().getParameterValue(0));
-            }
-        }
-
-        Parameter temp = n1.heightParameter;
-        n1.heightParameter = n2.heightParameter;
-        n2.heightParameter = temp;
-
-        if (hasRates) {
-            temp = n1.rateParameter;
-            n1.rateParameter = n2.rateParameter;
-            n2.rateParameter = temp;
-        }
-
-        n1.heightParameter.setParameterValueQuietly(0, height1);
-        n2.heightParameter.setParameterValueQuietly(0, height2);
-
-        if (hasRates) {
-            n1.rateParameter.setParameterValueQuietly(0, rate1);
-            n2.rateParameter.setParameterValueQuietly(0, rate2);
         }
     }
 
@@ -1277,11 +1006,7 @@ public class TreeModel extends AbstractModel implements MultivariateTraitTree, C
         public Node leftChild, rightChild;
         private int number;
         public Parameter heightParameter;
-        public Parameter rateParameter = null;
-        //public Parameter traitParameter = null;
         public Taxon taxon = null;
-
-        Map<String, Parameter> traitParameters = new HashMap<String, Parameter>();
 
         public Node() {
             parent = null;
@@ -1303,7 +1028,7 @@ public class TreeModel extends AbstractModel implements MultivariateTraitTree, C
 
             number = node.getNumber();
             taxon = tree.getNodeTaxon(node);
-            heightParameter.setId("" + number);
+            heightParameter.setId(getId() + "." + number);
             for (int i = 0; i < tree.getChildCount(node); i++) {
                 addChild(new Node(tree, tree.getChild(node, i)));
             }
@@ -1311,36 +1036,6 @@ public class TreeModel extends AbstractModel implements MultivariateTraitTree, C
 
         public final void setupHeightBounds() {
             heightParameter.addBounds(new NodeHeightBounds(heightParameter));
-        }
-
-        public final void createRateParameter(double[] initialValues) {
-            if (rateParameter == null) {
-                if (initialValues != null) {
-                    rateParameter = new Parameter.Default(initialValues[0]);
-                } else {
-                    rateParameter = new Parameter.Default(1.0);
-                }
-                setParameterId("rate", rateParameter);
-                rateParameter.addBounds(new Parameter.DefaultBounds(Double.POSITIVE_INFINITY, 0.0, 1));
-                addVariable(rateParameter);
-            }
-        }
-
-        public final void createTraitParameter(String name, double[] initialValues, boolean firesTreeEvents) {
-            createTraitParameter(name, initialValues.length, initialValues, firesTreeEvents);
-        }
-
-        public final void addTraitParameter(String name, Parameter trait, double[] initialValues, boolean firesTreeEvents) {
-            if (!traitParameters.containsKey(name)) {
-                setParameterId(name, trait);
-                setParameterValues(trait, trait.getDimension(), initialValues);
-
-                traitParameters.put(name, trait);
-
-                if (firesTreeEvents) {
-                    addVariable(trait);
-                }
-            }
         }
 
         private void setParameterValues(Parameter parameter, int dim, double[] initialValues) {
@@ -1355,72 +1050,12 @@ public class TreeModel extends AbstractModel implements MultivariateTraitTree, C
             }
         }
 
-        public final void createTraitParameter(String name, int dim, double[] initialValues, boolean firesTreeEvents) {
-
-            if (!traitParameters.containsKey(name)) {
-
-                Parameter trait = new Parameter.Default(dim);
-                setParameterId(name, trait);
-                trait.addBounds(new Parameter.DefaultBounds(Double.POSITIVE_INFINITY, Double.NEGATIVE_INFINITY, dim));
-
-                setParameterValues(trait, dim, initialValues);
-
-                traitParameters.put(name, trait);
-
-                if (firesTreeEvents) {
-                    addVariable(trait);
-                }
-            }
-        }
-
-        private void setParameterId(String name, Parameter trait) {
-            if (isRoot()) {
-                trait.setId("root." + name);
-            } else if (isExternal()) {
-                trait.setId(getTaxonId(getNumber()) + "." + name);
-            } else {
-                trait.setId("node" + getNumber() + "." + name);
-            }
-        }
-
         public final double getHeight() {
             return heightParameter.getParameterValue(0);
         }
 
-        public final double getRate() {
-            return rateParameter.getParameterValue(0);
-        }
-
-        public final double getTrait(String name) {
-            return traitParameters.get(name).getParameterValue(0);
-        }
-
-        public final double[] getMultivariateTrait(String name) {
-            return traitParameters.get(name).getParameterValues();
-        }
-
-        public final Map<String, Parameter> getTraitMap() {
-            return traitParameters;
-        }
-
         public final void setHeight(double height) {
             heightParameter.setParameterValue(0, height);
-        }
-
-        public final void setRate(double rate) {
-            //System.out.println("Rate set for parameter " + rateParameter.getParameterName());
-            rateParameter.setParameterValue(0, rate);
-        }
-
-        public final void setTrait(String name, double trait) {
-            //System.out.println("Trait set for parameter " + traitParameter.getParameterName());
-            traitParameters.get(name).setParameterValue(0, trait);
-        }
-
-        public final void setMultivariateTrait(String name, double[] trait) {
-            int dim = trait.length;
-            for (int i = 0; i < dim; i++)
-                traitParameters.get(name).setParameterValue(i, trait[i]);
         }
 
         public int getNumber() {
@@ -1519,10 +1154,6 @@ public class TreeModel extends AbstractModel implements MultivariateTraitTree, C
         public String toString() {
             return "node " + number + ", height=" + getHeight() + (taxon != null ? ": " + taxon.getId() : "");
         }
-
-        public Parameter getTraitParameter(String name) {
-            return traitParameters.get(name);
-        }
     }
 
     /**
@@ -1602,8 +1233,6 @@ public class TreeModel extends AbstractModel implements MultivariateTraitTree, C
 
     private boolean inEdit = false;
 
-    private boolean hasRates = false;
-    private boolean hasTraits = false;
     private boolean isTipDateSampled = false;
     private final boolean isTreeRandom;
 

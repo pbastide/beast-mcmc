@@ -86,6 +86,7 @@ public interface MutableTree extends Tree, MutableTaxonList {
 	/**
 	 * set the rate of the ith node in the tree (where the first n are internal).
 	 */
+	@Deprecated
 	void setNodeRate(NodeRef node, double height);
 
 	/**

@@ -29,6 +29,7 @@ import dr.evolution.tree.NodeRef;
 import dr.evolution.tree.Tree;
 import dr.evolution.tree.TreeTrait;
 import dr.evomodel.tree.TreeModel;
+import dr.evomodel.tree.TreeParameterModel;
 import dr.evomodelxml.branchratemodel.DiscretizedBranchRatesParser;
 import dr.inference.distribution.ParametricDistributionModel;
 import dr.inference.model.Model;
@@ -39,7 +40,9 @@ import dr.util.Author;
 import dr.util.Citable;
 import dr.util.Citation;
 
+import java.util.Collection;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 
 /**
@@ -48,7 +51,7 @@ import java.util.List;
  * @author Michael Defoin Platel
  * @version $Id: DiscretizedBranchRates.java,v 1.11 2006/01/09 17:44:30 rambaut Exp $
  */
-public class DiscretizedBranchRates extends AbstractBranchRateModel implements Citable {
+public class OldDiscretizedBranchRates extends AbstractBranchRateModel implements Citable {
     // Turn on an off the caching on rates for categories -
     // if off then the rates will be flagged to update on
     // a restore.
@@ -61,7 +64,7 @@ public class DiscretizedBranchRates extends AbstractBranchRateModel implements C
     private final ParametricDistributionModel distributionModel;
 
     // The rate categories of each branch
-    final Parameter rateCategoryParameter;
+    final TreeParameterModel rateCategories;
 
     private final int categoryCount;
     private final double step;
@@ -85,7 +88,7 @@ public class DiscretizedBranchRates extends AbstractBranchRateModel implements C
 
     //overSampling control the number of effective categories
 
-    public DiscretizedBranchRates(
+    public OldDiscretizedBranchRates(
             TreeModel tree,
             Parameter rateCategoryParameter,
             ParametricDistributionModel model,
@@ -94,7 +97,7 @@ public class DiscretizedBranchRates extends AbstractBranchRateModel implements C
 
     }
 
-    public DiscretizedBranchRates(
+    public OldDiscretizedBranchRates(
             TreeModel tree,
             Parameter rateCategoryParameter,
             ParametricDistributionModel model,
@@ -109,16 +112,9 @@ public class DiscretizedBranchRates extends AbstractBranchRateModel implements C
 
         this.cacheRates = cacheRates;
 
-        this.rateCategoryParameter = rateCategoryParameter;
+        this.rateCategories = new TreeParameterModel(tree, rateCategoryParameter, false);
 
-        int dim = rateCategoryParameter.getDimension();
-        if (dim != tree.getNodeCount()) {
-//            System.err.println("WARNING: setting dimension of parameter to match tree branch count ("
-//                    + dim + " != " + treeSize + ")"); // http://code.google.com/p/beast-mcmc/issues/detail?id=385
-            rateCategoryParameter.setDimension(tree.getNodeCount());
-        }
-
-        categoryCount = tree.getNodeCount() * overSampling;
+        categoryCount = (tree.getNodeCount() - 1) * overSampling;
         step = 1.0 / (double) categoryCount;
 
         rates = new double[2][categoryCount];
@@ -143,7 +139,7 @@ public class DiscretizedBranchRates extends AbstractBranchRateModel implements C
         }
 
         addModel(model);
-        addVariable(rateCategoryParameter);
+        addModel(rateCategories);
 
         updateRateCategories = true;
 
@@ -246,7 +242,7 @@ public class DiscretizedBranchRates extends AbstractBranchRateModel implements C
         for (int i = 0; i < treeModel.getNodeCount(); i++) {
             NodeRef node = treeModel.getNode(i);
             if (!treeModel.isRoot(node)) {
-                int rateCategory = (int) (rateCategoryParameter.getParameterValue(node.getNumber()) + 0.5);
+                int rateCategory = (int) (rateCategories.getNodeValue(treeModel, node) + 0.5);
                 treeRate += rates[currentRateArrayIndex][rateCategory] * treeModel.getBranchLength(node);
                 treeTime += treeModel.getBranchLength(node);
 
@@ -263,14 +259,14 @@ public class DiscretizedBranchRates extends AbstractBranchRateModel implements C
         if (model == distributionModel) {
             updateRateCategories = true;
             fireModelChanged();
+        } else if (model == rateCategories) {
+            fireModelChanged(null, index);
         }
     }
 
     protected final void handleVariableChangedEvent(Variable variable, int index, Parameter.ChangeType type) {
-        if (variable == rateCategoryParameter) {
-            fireModelChanged(null, index);
-        }
-    }
+        // nothing to do here
+   }
 
     protected void storeState() {
         if (cacheRates) {
@@ -299,7 +295,7 @@ public class DiscretizedBranchRates extends AbstractBranchRateModel implements C
             setupRates();
         }
 
-        int rateCategory = (int) (rateCategoryParameter.getParameterValue(node.getNumber()) + 0.5);
+        int rateCategory = (int) (rateCategories.getNodeValue(tree, node) + 0.5);
 
         //System.out.println(rates[rateCategory] + "\t"  + rateCategory);
         return rates[currentRateArrayIndex][rateCategory] * scaleFactor;
@@ -313,7 +309,7 @@ public class DiscretizedBranchRates extends AbstractBranchRateModel implements C
             setupRates();
         }
 
-        int rateCategory = (int) (rateCategoryParameter.getParameterValue(node.getNumber()) + 0.5);
+        int rateCategory = (int) (rateCategories.getNodeValue(tree, node) + 0.5);
 
         return rateCategory;
 
