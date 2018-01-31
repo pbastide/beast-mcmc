@@ -28,6 +28,8 @@ package dr.evomodel.treedatalikelihood.continuous.cdi;
 import dr.math.KroneckerOperation;
 import dr.math.matrixAlgebra.WrappedVector;
 import dr.xml.Reportable;
+import org.ejml.data.DenseMatrix64F;
+import org.ejml.interfaces.decomposition.EigenDecomposition;
 
 import java.util.Arrays;
 
@@ -62,6 +64,10 @@ public interface ContinuousDiffusionIntegrator extends Reportable {
     void getWishartStatistics(final int[] degreesOfFreedom, final double[] outerProducts);
 
     void setDiffusionPrecision(int diffusionIndex, final double[] matrix, double logDeterminant);
+
+    void transformDiffusionPrecision(int precisionIndex, DenseMatrix64F V);
+
+//    void transformPrior(int rootBufferIndex, int priorBufferIndex, DenseMatrix64F V);
 
     void setDiffusionStationaryVariance(int precisionIndex, final double[] alpha);
 
@@ -98,6 +104,8 @@ public interface ContinuousDiffusionIntegrator extends Reportable {
     void updatePreOrderPartial(int kp, int ip, int im, int jp, int jm);
 
     void calculatePreOrderRoot(int priorBufferIndex, int rootNodeIndex);
+
+//    double getDisplacement(final int offset, final int trait);
 
     class Basic implements ContinuousDiffusionIntegrator {
 
@@ -273,6 +281,15 @@ public interface ContinuousDiffusionIntegrator extends Reportable {
             System.arraycopy(matrix, 0, diffusions, dimTrait * dimTrait * precisionIndex, dimTrait * dimTrait);
             determinants[precisionIndex] = logDeterminant;
         }
+        @Override
+        public void transformDiffusionPrecision(int precisionIndex, DenseMatrix64F V) {
+            // Do Nothing.
+        }
+
+//        @Override
+//        public void transformPrior(int rootBufferIndex, int priorBufferIndex, DenseMatrix64F V) {
+//        // Do Nothing.
+//        }
 
         @Override
         public void setDiffusionStationaryVariance(int precisionIndex, final double[] alpha) {
@@ -598,6 +615,11 @@ public interface ContinuousDiffusionIntegrator extends Reportable {
             System.arraycopy(partials, dimPartial * priorBufferIndex, // Copy from prior
                     preOrderPartials, dimPartial * rootNodeIndex, dimPartial); // To pre-order root
         }
+
+//        @Override
+//        public double getDisplacement(final int offset, final int trait) {
+//            return 0.0;
+//        }
 
         protected void updatePartial(
                 final int kBuffer,

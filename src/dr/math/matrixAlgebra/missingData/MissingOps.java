@@ -1,5 +1,6 @@
 package dr.math.matrixAlgebra.missingData;
 
+import dr.inference.model.CompoundSymmetricMatrix;
 import dr.math.matrixAlgebra.ReadableVector;
 import dr.math.matrixAlgebra.WrappedVector;
 import dr.math.matrixAlgebra.WritableVector;
@@ -35,6 +36,10 @@ public class MissingOps {
                                               final double[] buffer) {
         System.arraycopy(source, offset, buffer, 0, numRows * numCols);
         return DenseMatrix64F.wrap(numRows, numCols, buffer);
+    }
+
+    public static DenseMatrix64F wrap(CompoundSymmetricMatrix A) {
+        return wrap(A.getAttributeValue(), 0, A.getRowDimension(), A.getColumnDimension());
     }
 
 

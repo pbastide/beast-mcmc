@@ -123,6 +123,16 @@ public abstract class AbstractDiffusionModelDelegate extends AbstractModel imple
     }
 
     @Override
+    public void transformTipPartial(double[] tipPartial){
+        // Do nothing
+    }
+
+    @Override
+    public void transformRootPartial(ContinuousDiffusionIntegrator cdi, int priorBufferIndex, int numTraits, int dimPrecision) {
+       // Do nothing
+    }
+
+    @Override
     public void updateDiffusionMatrices(ContinuousDiffusionIntegrator cdi, int[] branchIndices, double[] edgeLengths,
                                         int updateCount, boolean flip) {
 

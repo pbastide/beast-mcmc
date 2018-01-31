@@ -57,6 +57,10 @@ public interface DiffusionProcessDelegate extends Model {
 
     void setDiffusionModels(ContinuousDiffusionIntegrator cdi, boolean flipBuffers);
 
+    void transformTipPartial(double[] tipPartial);
+
+    void transformRootPartial(ContinuousDiffusionIntegrator cdi, int priorBufferIndex, int numTraits, int dimPrecision);
+
     void updateDiffusionMatrices(ContinuousDiffusionIntegrator cdi, int[] branchIndices, double[] edgeLengths,
                                  int updateCount, boolean flipBuffers);
 

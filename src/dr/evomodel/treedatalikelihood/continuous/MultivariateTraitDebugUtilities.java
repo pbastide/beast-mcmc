@@ -34,6 +34,7 @@ import dr.evomodel.treedatalikelihood.continuous.cdi.ContinuousDiffusionIntegrat
 import dr.evomodel.treedatalikelihood.continuous.cdi.SafeMultivariateActualizedWithDriftIntegrator;
 import dr.math.KroneckerOperation;
 import dr.math.matrixAlgebra.Matrix;
+import mpi.Comm;
 import org.ejml.data.Complex64F;
 import org.ejml.data.DenseMatrix64F;
 import org.ejml.factory.DecompositionFactory;
@@ -151,9 +152,10 @@ public class MultivariateTraitDebugUtilities {
                                               final double priorSampleSize, final TreeDataLikelihood callbackLikelihood,
                                               Matrix traitVariance, StringBuilder sb, DiffusionProcessDelegate diffusionProcessDelegate) {
 
-        if (diffusionProcessDelegate instanceof DiagonalOrnsteinUhlenbeckDiffusionModelDelegate) {
+        if (diffusionProcessDelegate instanceof DiagonalOrnsteinUhlenbeckDiffusionModelDelegate){
             // Eigen of strength of selection matrix
-            double[] eigVals = ((DiagonalOrnsteinUhlenbeckDiffusionModelDelegate) diffusionProcessDelegate).getStrengthOfSelection();
+            double[] eigVals = new double[traitVariance.rows()];
+            eigVals = ((DiagonalOrnsteinUhlenbeckDiffusionModelDelegate) diffusionProcessDelegate).getStrengthOfSelection();
             int n = eigVals.length;
 
             // Computation of matrix
@@ -195,34 +197,42 @@ public class MultivariateTraitDebugUtilities {
             return jointVariance;
 
         } else {
-            if (diffusionProcessDelegate instanceof OrnsteinUhlenbeckDiffusionModelDelegate) {
-                // Eigen of strength of selection matrix
-                double[][] alphaMat = ((OrnsteinUhlenbeckDiffusionModelDelegate) diffusionProcessDelegate).getStrengthOfSelection();
-                DenseMatrix64F A = new DenseMatrix64F(alphaMat);
-                int n = A.numCols;
-                if (n != A.numRows) throw new RuntimeException("Selection strength A matrix must be square.");
-                EigenDecomposition eigA = DecompositionFactory.eig(n, true);
-                if (!eigA.decompose(A)) throw new RuntimeException("Eigen decomposition failed.");
+            if ((diffusionProcessDelegate instanceof OrnsteinUhlenbeckDiffusionModelDelegate)
+                    || (diffusionProcessDelegate instanceof PositiveSemidefiniteOrnsteinUhlenbeckDiffusionModelDelegate)){
+                int n = traitVariance.rows();
+                double[] eigVals = new double[n];
+                DenseMatrix64F V = new DenseMatrix64F(n,n);
+                DenseMatrix64F Vinv = new DenseMatrix64F(n,n);
 
-                // Transformed variance
-                DenseMatrix64F V = EigenOps.createMatrixV(eigA);
-                DenseMatrix64F Vinv = new DenseMatrix64F(n, n);
-                CommonOps.invert(V, Vinv);
+                if (diffusionProcessDelegate instanceof OrnsteinUhlenbeckDiffusionModelDelegate) {
+                    double[][] alphaMat = ((OrnsteinUhlenbeckDiffusionModelDelegate) diffusionProcessDelegate).getStrengthOfSelection();
+                    DenseMatrix64F A = new DenseMatrix64F(alphaMat);
+                    if (n != A.numRows) throw new RuntimeException("Selection strength A matrix must be square.");
+                    EigenDecomposition eigA = DecompositionFactory.eig(n, true);
+                    if (!eigA.decompose(A)) throw new RuntimeException("Eigen decomposition failed.");
 
+                    // Rotation matrix
+                    V = EigenOps.createMatrixV(eigA);
+
+                    // Eigenvalues
+                    for (int p = 0; p < n; ++p) {
+                        Complex64F ev = eigA.getEigenvalue(p);
+                        if (!ev.isReal())
+                            throw new RuntimeException("Selection strength A should only have real eigenvalues.");
+                        eigVals[p] = ev.real;
+                    }
+                }
+                if (diffusionProcessDelegate instanceof PositiveSemidefiniteOrnsteinUhlenbeckDiffusionModelDelegate) {
+                    eigVals = ((PositiveSemidefiniteOrnsteinUhlenbeckDiffusionModelDelegate) diffusionProcessDelegate).getEigenValuesStrengthOfSelection();
+                    V = ((PositiveSemidefiniteOrnsteinUhlenbeckDiffusionModelDelegate) diffusionProcessDelegate).getEigenVectorsStrengthOfSelection();
+                }
+
+                // // Transformed variance
                 DenseMatrix64F transTraitVariance = new DenseMatrix64F(traitVariance.toComponents());
-
                 DenseMatrix64F tmp = new DenseMatrix64F(n, n);
+                CommonOps.invert(V, Vinv);
                 CommonOps.mult(Vinv, transTraitVariance, tmp);
                 CommonOps.multTransB(tmp, Vinv, transTraitVariance);
-
-                // Eigenvalues
-                double[] eigVals = new double[n];
-                for (int p = 0; p < n; ++p) {
-                    Complex64F ev = eigA.getEigenvalue(p);
-                    if (!ev.isReal())
-                        throw new RuntimeException("Selection strength A should only have real eigenvalues.");
-                    eigVals[p] = ev.real;
-                }
 
                 // inverse of eigenvalues
                 double[][] invEigVals = new double[n][n];
@@ -333,6 +343,13 @@ public class MultivariateTraitDebugUtilities {
         if (diffusion instanceof DiagonalOrnsteinUhlenbeckDiffusionModelDelegate) {
             for (int tip = 0; tip < tree.getExternalNodeCount(); ++tip) {
                 drift[tip] = ((DiagonalOrnsteinUhlenbeckDiffusionModelDelegate) diffusion).getAccumulativeDrift(
+                        tree.getExternalNode(tip), priorMean);
+            }
+        }
+
+        if (diffusion instanceof PositiveSemidefiniteOrnsteinUhlenbeckDiffusionModelDelegate) {
+            for (int tip = 0; tip < tree.getExternalNodeCount(); ++tip) {
+                drift[tip] = ((PositiveSemidefiniteOrnsteinUhlenbeckDiffusionModelDelegate) diffusion).getAccumulativeDrift(
                         tree.getExternalNode(tip), priorMean);
             }
         }

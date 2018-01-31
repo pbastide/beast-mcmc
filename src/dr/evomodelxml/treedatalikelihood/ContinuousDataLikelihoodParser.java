@@ -39,10 +39,7 @@ import dr.evomodel.treedatalikelihood.continuous.*;
 import dr.evomodel.treedatalikelihood.continuous.cdi.PrecisionType;
 import dr.evomodel.treedatalikelihood.preorder.TipRealizedValuesViaFullConditionalDelegate;
 import dr.evomodelxml.treelikelihood.TreeTraitParserUtilities;
-import dr.inference.model.CompoundParameter;
-import dr.inference.model.DiagonalMatrix;
-import dr.inference.model.MatrixParameterInterface;
-import dr.inference.model.Parameter;
+import dr.inference.model.*;
 import dr.xml.*;
 
 import java.util.List;
@@ -165,6 +162,12 @@ public class ContinuousDataLikelihoodParser extends AbstractXMLObjectParser {
             strengthOfSelectionMatrixParam = (MatrixParameterInterface) cxo.getChild(MatrixParameterInterface.class);
         }
 
+        CompoundSymmetricMatrix symmetricStrengthOfSelectionMatrixParam = null;
+        if (xo.hasChildNamed(STRENGTH_OF_SELECTION_MATRIX)) {
+            XMLObject cxo = xo.getChild(STRENGTH_OF_SELECTION_MATRIX);
+            symmetricStrengthOfSelectionMatrixParam = (CompoundSymmetricMatrix) cxo.getChild(CompoundSymmetricMatrix.class);
+        }
+
         DiagonalMatrix diagonalStrengthOfSelectionMatrixParam = null;
         if (xo.hasChildNamed(STRENGTH_OF_SELECTION_MATRIX)) {
             XMLObject cxo = xo.getChild(STRENGTH_OF_SELECTION_MATRIX);
@@ -175,13 +178,17 @@ public class ContinuousDataLikelihoodParser extends AbstractXMLObjectParser {
         if ((optimalTraitsModels != null && diagonalStrengthOfSelectionMatrixParam != null) || xo.getAttribute(FORCE_OU, false)) {
             diffusionProcessDelegate = new DiagonalOrnsteinUhlenbeckDiffusionModelDelegate(treeModel, diffusionModel, optimalTraitsModels, diagonalStrengthOfSelectionMatrixParam);
         } else {
-            if ((optimalTraitsModels != null && strengthOfSelectionMatrixParam != null) || xo.getAttribute(FORCE_OU, false)) {
-                diffusionProcessDelegate = new OrnsteinUhlenbeckDiffusionModelDelegate(treeModel, diffusionModel, optimalTraitsModels, strengthOfSelectionMatrixParam);
+            if ((optimalTraitsModels != null && symmetricStrengthOfSelectionMatrixParam != null) || xo.getAttribute(FORCE_OU, false)) {
+                diffusionProcessDelegate = new PositiveSemidefiniteOrnsteinUhlenbeckDiffusionModelDelegate(treeModel, diffusionModel, optimalTraitsModels, symmetricStrengthOfSelectionMatrixParam);
             } else {
-                if (driftModels != null || xo.getAttribute(FORCE_DRIFT, false)) {
-                    diffusionProcessDelegate = new DriftDiffusionModelDelegate(treeModel, diffusionModel, driftModels);
+                if ((optimalTraitsModels != null && strengthOfSelectionMatrixParam != null) || xo.getAttribute(FORCE_OU, false)) {
+                    diffusionProcessDelegate = new OrnsteinUhlenbeckDiffusionModelDelegate(treeModel, diffusionModel, optimalTraitsModels, strengthOfSelectionMatrixParam);
                 } else {
-                    diffusionProcessDelegate = new HomogeneousDiffusionModelDelegate(treeModel, diffusionModel);
+                    if (driftModels != null || xo.getAttribute(FORCE_DRIFT, false)) {
+                        diffusionProcessDelegate = new DriftDiffusionModelDelegate(treeModel, diffusionModel, driftModels);
+                    } else {
+                        diffusionProcessDelegate = new HomogeneousDiffusionModelDelegate(treeModel, diffusionModel);
+                    }
                 }
             }
         }

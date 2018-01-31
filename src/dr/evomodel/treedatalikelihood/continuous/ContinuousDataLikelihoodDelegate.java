@@ -178,8 +178,8 @@ public class ContinuousDataLikelihoodDelegate extends AbstractModel implements D
                             matrixBufferCount
                     );
                 } else {
-                    if (diffusionProcessDelegate instanceof OrnsteinUhlenbeckDiffusionModelDelegate) {
-                        base = new SafeMultivariateActualizedWithDriftIntegrator(
+                    if (diffusionProcessDelegate instanceof PositiveSemidefiniteOrnsteinUhlenbeckDiffusionModelDelegate) {
+                        base = new SafeMultivariatePositiveSemidefiniteActualizedWithDriftIntegrator(
                                 precisionType,
                                 numTraits,
                                 dimTrait,
@@ -187,8 +187,8 @@ public class ContinuousDataLikelihoodDelegate extends AbstractModel implements D
                                 matrixBufferCount
                         );
                     } else {
-                        if (diffusionProcessDelegate instanceof DriftDiffusionModelDelegate) {
-                            base = new SafeMultivariateWithDriftIntegrator(
+                        if (diffusionProcessDelegate instanceof OrnsteinUhlenbeckDiffusionModelDelegate) {
+                            base = new SafeMultivariateActualizedWithDriftIntegrator(
                                     precisionType,
                                     numTraits,
                                     dimTrait,
@@ -196,8 +196,8 @@ public class ContinuousDataLikelihoodDelegate extends AbstractModel implements D
                                     matrixBufferCount
                             );
                         } else {
-                            if (allowSingular) {
-                                base = new SafeMultivariateIntegrator(
+                            if (diffusionProcessDelegate instanceof DriftDiffusionModelDelegate) {
+                                base = new SafeMultivariateWithDriftIntegrator(
                                         precisionType,
                                         numTraits,
                                         dimTrait,
@@ -205,13 +205,23 @@ public class ContinuousDataLikelihoodDelegate extends AbstractModel implements D
                                         matrixBufferCount
                                 );
                             } else {
-                                base = new MultivariateIntegrator(
-                                        precisionType,
-                                        numTraits,
-                                        dimTrait,
-                                        partialBufferCount,
-                                        matrixBufferCount
-                                );
+                                if (allowSingular) {
+                                    base = new SafeMultivariateIntegrator(
+                                            precisionType,
+                                            numTraits,
+                                            dimTrait,
+                                            partialBufferCount,
+                                            matrixBufferCount
+                                    );
+                                } else {
+                                    base = new MultivariateIntegrator(
+                                            precisionType,
+                                            numTraits,
+                                            dimTrait,
+                                            partialBufferCount,
+                                            matrixBufferCount
+                                    );
+                                }
                             }
                         }
                     }
@@ -268,6 +278,8 @@ public class ContinuousDataLikelihoodDelegate extends AbstractModel implements D
 
             rootProcessDelegate.setRootPartial(cdi);
 
+            diffusionProcessDelegate.transformRootPartial(cdi, rootProcessDelegate.getPriorBufferIndex(), numTraits, precisionType.getMatrixLength(dimTrait));
+
             updateDiffusionModel = true;
             
         } catch (TaxonList.MissingTaxonException mte) {
@@ -314,6 +326,9 @@ public class ContinuousDataLikelihoodDelegate extends AbstractModel implements D
         sb.append("\n\n");
 
         double[][] traitPrecision = getDiffusionModel().getPrecisionmatrix();
+//        if (diffusionProcessDelegate instanceof PositiveSemidefiniteOrnsteinUhlenbeckDiffusionModelDelegate){
+//            ((PositiveSemidefiniteOrnsteinUhlenbeckDiffusionModelDelegate) diffusionProcessDelegate).transformPrecision(traitPrecision);
+//        }
         Matrix traitVariance = new Matrix(traitPrecision).inverse();
 
         double[][] jointVariance = MultivariateTraitDebugUtilities.getJointVariance(tree, normalization,
@@ -382,6 +397,10 @@ public class ContinuousDataLikelihoodDelegate extends AbstractModel implements D
 
             double[][] varianceDatum = jointVariance;
             double[] datum = rawDatum;
+
+//            if (diffusionProcessDelegate instanceof PositiveSemidefiniteOrnsteinUhlenbeckDiffusionModelDelegate){
+//                ((PositiveSemidefiniteOrnsteinUhlenbeckDiffusionModelDelegate) diffusionProcessDelegate).transformData(datum, tipCount);
+//            }
 
             double[] driftDatum = drift;
             
@@ -566,6 +585,7 @@ public class ContinuousDataLikelihoodDelegate extends AbstractModel implements D
         }
 
         final double[] tipPartial = dataModel.getTipPartial(tipIndex, forceCompletelyObserved);
+        diffusionProcessDelegate.transformTipPartial(tipPartial);
         setTipDataDirectly(tipIndex, tipPartial);
     }
 
@@ -649,6 +669,8 @@ public class ContinuousDataLikelihoodDelegate extends AbstractModel implements D
         cdi.updatePostOrderPartials(operations, operationCount, computeWishartStatistics);
 
         double[] logLikelihoods = new double[numTraits];
+
+//        diffusionProcessDelegate.transformPrior(partialBufferHelper.getOffsetIndex(rootNodeNumber), rootProcessDelegate.getPriorBufferIndex(), cdi);
 
         rootProcessDelegate.calculateRootLogLikelihood(cdi, partialBufferHelper.getOffsetIndex(rootNodeNumber),
                 logLikelihoods, computeWishartStatistics);
